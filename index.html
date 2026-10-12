@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chatroom</title>
+    <!-- Tailwind CSS for sleek UI styling -->
+    <script src="https://tailwindcss.com"></script>
+    <!-- Socket.io client dependency -->
+    <script src="https://cloudflare.com"></script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col justify-center items-center font-sans">
+
+    <!-- Username Selection Overlay -->
+    <div id="login-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-lg p-6 shadow-2xl w-full max-w-sm text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Enter Chatroom</h2>
+            <input type="text" id="username-input" placeholder="Type your username..." 
+                   class="w-full px-4 py-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button id="join-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
+                Join Chat
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Chat Window Container -->
+    <div class="w-full max-w-2xl h-[85vh] bg-white rounded-xl shadow-lg flex flex-col overflow-hidden m-4 hidden" id="chat-container">
+        
+        <!-- Header Window Bar -->
+        <div class="bg-blue-600 px-6 py-4 flex justify-between items-center text-white">
+            <div>
+                <h1 class="text-xl font-bold">Global Chatroom</h1>
+                <p class="text-xs opacity-80" id="user-count">0 users active</p>
+            </div>
+            </span>
+        </div>
+
+        <!-- Scrollable Messages Area -->
+        <div class="flex-1 p-6 overflow-y-auto space-y-4 bg-gray-50" id="message-board">
+            <!-- Dynamic elements load here via JavaScript -->
+        </div>
+
+        <!-- Input Tray Area -->
+        <form id="chat-form" class="p-4 border-t bg-white flex items-center space-x-3">
+            <input type="text" id="message-input" autocomplete="off" placeholder="Write your message here..." 
+                   class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition">
+                Send
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const socket = io();
+        let myUsername = "";
+
+        const loginOverlay = document.getElementById('login-overlay');
+        const chatContainer = document.getElementById('chat-container');
+        const usernameInput = document.getElementById('username-input');
+        const joinBtn = document.getElementById('join-btn');
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+        const messageBoard = document.getElementById('message-board');
+        const userCountText = document.getElementById('user-count');
+        const identityBadge = document.getElementById('display-identity');
+
+        // Handle joining the room
+        joinBtn.addEventListener('click', () => {
+            myUsername = usernameInput.value.trim();
+            if (!myUsername) return alert("Please input a valid username.");
+            
+            // Hide login, reveal chat grid
+            loginOverlay.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+            identityBadge.textContent = myUsername;
+
+            // Register details with backend server
+            socket.emit('register_user', { username: myUsername });
+            messageInput.focus();
+        });
+
+        // Handle sending chats
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            socket.emit('send_message', { username: myUsername, message: text });
+            messageInput.value = '';
+        });
+
+        // Listen for incoming general messages
+        socket.on('receive_message', (data) => {
+            const msgRow = document.createElement('div');
+            msgRow.className = "flex flex-col";
+            
+            // Align to right if it's our own message, left if it's someone else's
+            if (data.username === myUsername) {
+                msgRow.className += " items-end";
+                msgRow.innerHTML = `
+                    <span class="text-xs text-gray-500 mr-1">You</span>
+                    <div class="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-md shadow-sm break-words">${data.message}</div>
+                `;
+            } else {
+                msgRow.className += " items-start";
+                msgRow.innerHTML = `
+                    <span class="text-xs text-gray-600 ml-1">${data.username}</span>
+                    <div class="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-md shadow-sm break-words">${data.message}</div>
+                `;
+            }
+            messageBoard.appendChild(msgRow);
+            messageBoard.scrollTop = messageBoard.scrollHeight; // Auto-scroll down
+        });
+
+        // Listen for server connection logs
+        socket.on('status_message', (data) => {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = "text-center text-xs font-medium text-gray-400 my-2 italic";
+            statusDiv.textContent = data.msg;
+            messageBoard.appendChild(statusDiv);
+            messageBoard.scrollTop = messageBoard.scrollHeight;
+        });
+
+        // Update real-time counter metric
+        socket.on('update_user_count', (data) => {
+            userCountText.textContent = `${data.count} user${data.count === 1 ? '' : 's'} active`;
+        });
+    </script>
+</body>
+</html>
